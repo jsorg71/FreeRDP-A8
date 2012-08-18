@@ -239,7 +239,7 @@ void gdi_Glyph_BeginDraw(rdpContext* context, int x, int y, int width, int heigh
 	brush = gdi_CreateSolidBrush(fgcolor);
 
 	gdi_FillRect(gdi->drawing->hdc, &rect, brush);
-
+	gdi_DeleteObject((HGDIOBJECT) brush);
 	gdi->textColor = gdi_SetTextColor(gdi->drawing->hdc, bgcolor);
 }
 

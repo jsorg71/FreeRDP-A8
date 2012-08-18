@@ -109,8 +109,8 @@ void xf_SetWindowFullscreen(xfInfo* xfi, xfWindow* window, boolean fullscreen)
 	{
 		xf_SetWindowDecorations(xfi, window, false);
 
-                XMoveResizeWindow(xfi->display, window->handle, 0, 0, window->width, window->height);
-                XMapRaised(xfi->display, window->handle);
+		XMoveResizeWindow(xfi->display, window->handle, 0, 0, window->width, window->height);
+		XMapRaised(xfi->display, window->handle);
 
 		window->fullscreen = true;
 	}

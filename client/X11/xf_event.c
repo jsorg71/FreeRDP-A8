@@ -513,9 +513,9 @@ boolean xf_event_ConfigureNotify(xfInfo* xfi, XEvent* event, boolean app)
 		 * Translate these to root window coordinates.
 		 */
 
-                XTranslateCoordinates(xfi->display, xfw->handle,
+		XTranslateCoordinates(xfi->display, xfw->handle,
 			RootWindowOfScreen(xfi->screen),
-                        0, 0, &xfw->left, &xfw->top, &childWindow);
+			0, 0, &xfw->left, &xfw->top, &childWindow);
 
 		xfw->width = event->xconfigure.width;
 		xfw->height = event->xconfigure.height;
@@ -528,7 +528,7 @@ boolean xf_event_ConfigureNotify(xfInfo* xfi, XEvent* event, boolean app)
 
 		if (app && xfw->decorations)
 		{
- 			xf_rail_adjust_position(xfi, window);
+			xf_rail_adjust_position(xfi, window);
 			window->windowOffsetX = xfw->left;
 			window->windowOffsetY = xfw->top;
 			window->windowWidth = xfw->right - xfw->left;

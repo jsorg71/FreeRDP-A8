@@ -149,12 +149,12 @@ RFX_CONTEXT* rfx_context_new(void)
 
 	/* create profilers for default decoding routines */
 	rfx_profiler_create(context);
-	
+
 	/* set up default routines */
 	context->decode_ycbcr_to_rgb = rfx_decode_ycbcr_to_rgb;
 	context->encode_rgb_to_ycbcr = rfx_encode_rgb_to_ycbcr;
-	context->quantization_decode = rfx_quantization_decode;	
-	context->quantization_encode = rfx_quantization_encode;	
+	context->quantization_decode = rfx_quantization_decode;
+	context->quantization_encode = rfx_quantization_encode;
 	context->dwt_2d_decode = rfx_dwt_2d_decode;
 	context->dwt_2d_encode = rfx_dwt_2d_encode;
 
@@ -266,7 +266,7 @@ static void rfx_process_message_channels(RFX_CONTEXT* context, STREAM* s)
 
 	stream_read_uint8(s, numChannels); /* numChannels (1 byte), must bet set to 0x01 */
 
-	/* In RDVH sessions, numChannels will represent the number of virtual monitors 
+	/* In RDVH sessions, numChannels will represent the number of virtual monitors
 	 * configured and does not always be set to 0x01 as [MS-RDPRFX] said.
 	 */
 	if (numChannels < 1)
@@ -891,4 +891,3 @@ FREERDP_API void rfx_compose_message(RFX_CONTEXT* context, STREAM* s,
 
 	rfx_compose_message_data(context, s, rects, num_rects, image_data, width, height, rowstride);
 }
-

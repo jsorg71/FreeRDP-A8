@@ -50,7 +50,6 @@ struct rdpsnd_audio_q_plugin
 	char *  device_name;
 	int     is_playing;
 	int     buf_index;
-    
 	AudioStreamBasicDescription  data_format;
 	AudioQueueRef                aq_ref;
 	AudioQueueBufferRef          buffers[AQ_NUM_BUFFERS];
@@ -60,7 +59,7 @@ typedef struct rdpsnd_audio_q_plugin rdpsndAudioQPlugin;
 static void rdpsnd_audio_close(rdpsndDevicePlugin* device)
 {
 	rdpsndAudioQPlugin* aq_plugin_p = (rdpsndAudioQPlugin*) device;
-    
+
 	AudioQueueStop(aq_plugin_p->aq_ref, 0);
 	aq_plugin_p->is_open = 0;
 }
@@ -69,19 +68,19 @@ static void rdpsnd_audio_open(rdpsndDevicePlugin* device, rdpsndFormat* format, 
 {
 	int rv;
 	int i;
-    
+
 	rdpsndAudioQPlugin* aq_plugin_p = (rdpsndAudioQPlugin *) device;
 	if (aq_plugin_p->is_open) {
 		return;
 	}
-    
+
 	aq_plugin_p->buf_index = 0;
-    
+
 	// setup AudioStreamBasicDescription
 	aq_plugin_p->data_format.mSampleRate = 44100;
 	aq_plugin_p->data_format.mFormatID = kAudioFormatLinearPCM;
 	aq_plugin_p->data_format.mFormatFlags = kAudioFormatFlagIsSignedInteger | kLinearPCMFormatFlagIsPacked;
-    
+
 	// until we know better, assume that one packet = one frame
 	// one frame = bytes_per_sample x number_of_channels
 	aq_plugin_p->data_format.mBytesPerPacket = 4;
@@ -89,29 +88,30 @@ static void rdpsnd_audio_open(rdpsndDevicePlugin* device, rdpsndFormat* format, 
 	aq_plugin_p->data_format.mBytesPerFrame = 4;
 	aq_plugin_p->data_format.mChannelsPerFrame = 2;
 	aq_plugin_p->data_format.mBitsPerChannel = 16;
-    
+
 	rv = AudioQueueNewOutput(&aq_plugin_p->data_format, // audio stream basic desc
 				 aq_playback_cb,            // callback when more data is required
 				 aq_plugin_p,               // data to pass to callback
-				 CFRunLoopGetCurrent(),     // The current run loop, and the one on 
-							    // which the audio queue playback callback 
+				 CFRunLoopGetCurrent(),     // The current run loop, and the one on
+							    // which the audio queue playback callback
 							    // will be invoked
-				 kCFRunLoopCommonModes,     // run loop modes in which callbacks can 
+				 kCFRunLoopCommonModes,     // run loop modes in which callbacks can
 							    // be invoked
 				 0,                         // flags - reserved
 				 &aq_plugin_p->aq_ref
 				);
-	if (rv != 0) {
+	if (rv != 0)
+	{
 		printf("rdpsnd_audio_open: AudioQueueNewOutput() failed with error %d\n", rv);
 		aq_plugin_p->is_open = 1;
 		return;
 	}
-    
+
 	for (i = 0; i < AQ_NUM_BUFFERS; i++)
 	{
 		rv = AudioQueueAllocateBuffer(aq_plugin_p->aq_ref, AQ_BUF_SIZE, &aq_plugin_p->buffers[i]);
 	}
-    
+
 	aq_plugin_p->is_open = 1;
 }
 
@@ -149,23 +149,24 @@ static void rdpsnd_audio_play(rdpsndDevicePlugin* device, uint8* data, int size)
 	rdpsndAudioQPlugin* aq_plugin_p = (rdpsndAudioQPlugin *) device;
 	AudioQueueBufferRef aq_buf_ref;
 	int                 len;
-    
-	if (!aq_plugin_p->is_open) {
+
+	if (!aq_plugin_p->is_open)
+	{
 		return;
 	}
 
 	/* get next empty buffer */
 	aq_buf_ref = aq_plugin_p->buffers[aq_plugin_p->buf_index];
-    
+
 	// fill aq_buf_ref with audio data
 	len = size > AQ_BUF_SIZE ? AQ_BUF_SIZE : size;
-    
+
 	memcpy(aq_buf_ref->mAudioData, (char *) data, len);
 	aq_buf_ref->mAudioDataByteSize = len;
-    
+
 	// add buffer to audioqueue
 	AudioQueueEnqueueBuffer(aq_plugin_p->aq_ref, aq_buf_ref, 0, 0);
-    
+
 	// update buf_index
 	aq_plugin_p->buf_index++;
 	if (aq_plugin_p->buf_index >= AQ_NUM_BUFFERS) {
@@ -197,7 +198,7 @@ int FreeRDPRdpsndDeviceEntry(PFREERDP_RDPSND_DEVICE_ENTRY_POINTS pEntryPoints)
 {
 	rdpsndAudioQPlugin* aqPlugin;
 	RDP_PLUGIN_DATA* data;
-    
+
 	aqPlugin = xnew(rdpsndAudioQPlugin);
 
 	aqPlugin->device.Open = rdpsnd_audio_open;
@@ -210,8 +211,9 @@ int FreeRDPRdpsndDeviceEntry(PFREERDP_RDPSND_DEVICE_ENTRY_POINTS pEntryPoints)
 	aqPlugin->device.Free = rdpsnd_audio_free;
 
 	data = pEntryPoints->plugin_data;
-    
-	if (data && strcmp((char *)data->data[0], "macaudio") == 0) {
+
+	if (data && strcmp((char *)data->data[0], "macaudio") == 0)
+	{
 		if(strlen((char *)data->data[1]) > 0)
 			aqPlugin->device_name = strdup((char *)data->data[1]);
 		else
@@ -220,4 +222,3 @@ int FreeRDPRdpsndDeviceEntry(PFREERDP_RDPSND_DEVICE_ENTRY_POINTS pEntryPoints)
 	pEntryPoints->pRegisterRdpsndDevice(pEntryPoints->rdpsnd, (rdpsndDevicePlugin*)aqPlugin);
 	return 0;
 }
-
