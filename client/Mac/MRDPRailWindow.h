@@ -9,5 +9,9 @@
 #import <Cocoa/Cocoa.h>
 
 @interface MRDPRailWindow : NSWindow
+{
+    @public
+    BOOL becomeKeyWindowFlag;
+}
 
 @end

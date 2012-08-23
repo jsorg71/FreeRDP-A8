@@ -11,36 +11,13 @@
  *  + provide a UI for configuring optional parameters, but keep cmd line args
  *  + audio redirection is delayed considerably
  *  + caps lock key needs to be sent in func flagsChanged()
- *  + libfreerdp-utils.1.0.dylib needs to be installed to /usr/local/lib
- *
- *  - MRDPView implementation is incomplete
- *  - all variables should have consistent nameing scheme - camel case
- *  - all funcs same as above
- *  - PolygonSc seems to create a transparent rect
- *  - ensure mouse cursor changes are working ok after moving to NSTracking area
- *  - RAIL: 
- *  -       
- *  -       
- *  -       tool tips to be correctly positioned
- *  -       dragging is slightly of
- *  -       resize after dragging not working
- *  -       dragging app from macbook to monitor gives exec/access err
- *  -       unable to drag rect out of monitor boundaries
- *  -       
- *  -       
- *  -        
+ *  + libfreerdp-utils.1.0.dylib needs to be manually installed to /usr/local/lib
+ *    until we find a way to do it automatically
  */
- 
+
+#import "MRDPRailWindow.h"
 #import "MRDPView.h"
 #import "MRDPCursor.h"
-
-#define RUN_IN_XCODE
-
-// LK_TODO 
-#define GOT_HERE //printf("### got here: %s : %s() : %d\n", __FILE__, __func__, __LINE__)
-
-// RAIL_TODO DELETE WHEN DONE TESTING
-#define MRDP_DRAW_INDIVIDUAL_RECTS
 
 @implementation MRDPView
 
@@ -61,6 +38,7 @@ const char* error_code_names[] =
     "RAIL_EXEC_E_FAIL",
     "RAIL_EXEC_E_SESSION_LOCKED"
 };
+
 
 struct kkey g_keys[256] =
 {
@@ -265,7 +243,7 @@ struct kkey g_keys[256] =
     // setup a mouse tracking area
     NSTrackingArea * trackingArea = [[NSTrackingArea alloc] initWithRect:[self visibleRect] options:NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved | NSTrackingCursorUpdate | NSTrackingEnabledDuringMouseDrag | NSTrackingActiveWhenFirstResponder owner:self userInfo:nil];
     
-    //[self addTrackingArea:trackingArea];
+    [self addTrackingArea:trackingArea];
 
     // windows in RemoteApp (RAIL) mode cannot have title bars
     NSArray * args = [[NSProcessInfo processInfo] arguments];
@@ -281,6 +259,8 @@ struct kkey g_keys[256] =
         [self addTrackingArea:trackingArea];
    
     mouseInClientArea = YES;
+    [self setAcceptsTouchEvents:YES];
+    printScreenInfo();
 }
 
 /** *********************************************************************
@@ -451,22 +431,23 @@ struct kkey g_keys[256] =
     if (!is_connected)
         return;
 
-    NSPoint loc = [event locationInWindow];
-    int x = (int) loc.x;
-    int y = (int) loc.y;
+    // we get more two finger trackpad scroll events
+    // than scrollWheel events, so we drop some
     
-    y = height - y;
-
-    flags = PTR_FLAGS_WHEEL;
-    if ([event deltaY] < 0) {
-        flags |= PTR_FLAGS_WHEEL_NEGATIVE | 0x0088;
+    if (gestureEventInProgress) {
+        scrollWheelCount++;
+        if (scrollWheelCount % 8 != 0)
+            return;
+    }
+    
+    if ([event scrollingDeltaY] < 0) {
+        flags = PTR_FLAGS_WHEEL | PTR_FLAGS_WHEEL_NEGATIVE | 0x0088;
     }
     else {
-        flags |= 0x0078;
+        flags = PTR_FLAGS_WHEEL | 0x78;
     }
-    x += (int) [event deltaX];
-    y += (int) [event deltaY];
-    rdp_instance->input->MouseEvent(rdp_instance->input, flags, x, y);
+    
+    rdp_instance->input->MouseEvent(rdp_instance->input, flags, 0, 0);
 }
 
 /** *********************************************************************
@@ -484,25 +465,7 @@ struct kkey g_keys[256] =
     NSPoint loc = [event locationInWindow];
     int x = (int) loc.x;
     int y = (int) loc.y;
-    
-    // RAIL_TODO delete this if not reqd
-    if ((isRemoteApp) && (isMoveSizeInProgress)) {
-        if (saveInitialDragLoc) {
-            saveInitialDragLoc = NO;
-            savedDragLocation.x = x;
-            savedDragLocation.y = y;
-            return;
-        }
-
-        int newX = x - savedDragLocation.x;
-        int newY = y - savedDragLocation.y;
-
-        NSRect r = [[self window] frame];
-        r.origin.x += newX;
-        r.origin.y += newY;
-        [[g_mrdpview window] setFrame:r display:YES];
-    }
-
+   
     y = height - y;
 
     // send mouse motion event to RDP server
@@ -532,7 +495,7 @@ struct kkey g_keys[256] =
 - (void) keyUp:(NSEvent *) event
 {
     int key;
- 
+    
     if (!is_connected) {
         return;
     }
@@ -726,63 +689,6 @@ struct kkey g_keys[256] =
 ************************************************************************/
 
 /** *********************************************************************
- * called when RDP server wants us to update a rect with new data
- ***********************************************************************/
-
-- (void) my_draw_rect:(void *)context
-{
-    int    w;
-    int    h;
-    
-    rdpContext * ctx = (rdpContext *) context;
-    
-    struct rgba_data 
-    {
-        char red;
-        char green;
-        char blue;
-        char alpha;
-    };
-    
-    if (isRemoteApp && currentWindow) {
-        NSRect vrect = [ [currentWindow view] frame];
-        [[currentWindow view] setNeedsDisplayInRect:vrect];
-        // actual drawing will be done in MRDPRailView:drawRect()
-        return;
-    }
-    
-    w = width;
-    h = height;
-    rect.origin.x = 0;
-    rect.origin.y = 0;
-    rect.size.width = w;
-    rect.size.height = h;
-    
-    if (!bmiRep) {
-        pixel_data = (char *) malloc(w * h * sizeof(struct rgba_data));
-        bmiRep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:(unsigned char **) &pixel_data
-                                                         pixelsWide:w
-                                                         pixelsHigh:h
-                                                      bitsPerSample:8
-                                                    samplesPerPixel:sizeof(struct rgba_data)
-                                                           hasAlpha:YES
-                                                           isPlanar:NO
-                                                     colorSpaceName:NSDeviceRGBColorSpace
-                                                       bitmapFormat:0 //NSAlphaFirstBitmapFormat
-                                                        bytesPerRow:w * sizeof(struct rgba_data)
-                                                       bitsPerPixel:0];
-    }
-    
-#ifdef MRDP_DRAW_INDIVIDUAL_RECTS
-    [self setNeedsDisplayInRect:rect];
-    return;
-#endif
-
-    convert_color_space(pixel_data, (char *) ctx->gdi->primary_buffer, &rect, w, h);
-    [self setNeedsDisplayInRect:rect];
-}
-
-/** *********************************************************************
  * save state info for use by other methods later on
  ***********************************************************************/
 
@@ -927,43 +833,20 @@ struct kkey g_keys[256] =
     innerRect.size.width = width;
     innerRect.size.height = height;
     [g_mrdpview setFrame:innerRect];
-    
-    // main window displays desktop background - hide it
-    [[g_mrdpview window] orderOut:g_mrdpview];
 }
 
-// RAIL_TODO is this func required
 - (void) windowDidResize:(NSNotification *) notification
 {
-    RAIL_WINDOW_MOVE_ORDER windowMove;
+}
 
-    printf("RAIL_TODO: MRDPView: windowDidResize() - not yet implemented\n");
+- (void) beginGestureWithEvent:(NSEvent *)event
+{
+    gestureEventInProgress = YES;
+}
 
-    return;
-    
-    // window resize valid only in RemoteApp mode
-    if (!g_mrdpview->isRemoteApp)
-        return;
-    
-    // window has resized, let server know
-
-    NSRect r = [[g_mrdpview window] frame];
-    printf("----- LK_TODO: MRDPView:windowDidResize (%d,%d %dx%d)\n", 
-           (int) r.origin.x, (int) r.origin.y, 
-           (int) r.size.width, (int) r.size.height);
-    
-
-    windowMove.windowId = [currentWindow windowID];
-    
-    windowMove.left = (uint16) r.origin.x;                           // x-cordinate of top left corner
-    windowMove.right = (uint16) (windowMove.left + r.size.width);    // x-cordinate of bottom right corner
-    windowMove.top = (uint16) r.origin.y;                            // y-cordinate of top left corner
-    windowMove.bottom = (uint16) (windowMove.top + r.size.height);   // y-cordinate of bottom right corner
-
-    printf("----- LK_TODO: MRDPView:windowDidResize windowID=%d left=%d top=%d right=%d bottom=x%d width=%f height=%f\n", 
-           [currentWindow windowID], windowMove.left, windowMove.top, windowMove.right, windowMove.bottom, r.size.width, r.size.height);
-
-    //mac_send_rail_client_event(g_mrdpview->rdp_instance->context->channels, RDP_EVENT_TYPE_RAIL_CLIENT_WINDOW_MOVE, &windowMove);
+- (void) endGestureWithEvent:(NSEvent *)event
+{
+    gestureEventInProgress = NO;
 }
 
 /************************************************************************
@@ -1062,111 +945,13 @@ boolean mac_pre_connect(freerdp *inst)
     
     NSArray *args = [[NSProcessInfo processInfo] arguments];
 
-#ifdef RUN_IN_XCODE
-    g_mrdpview->argc = 30;
-#else
     g_mrdpview->argc = (int) [args count];
-#endif
 
     g_mrdpview->argv = malloc(sizeof(char *) * g_mrdpview->argc);
     if (g_mrdpview->argv == NULL) {
         return false;
     }
     
-#ifdef RUN_IN_XCODE
-    
-    // create our own cmd line args
-    i = 0;
-    
-    NSString *sptr = [args objectAtIndex:0];
-    len = [sptr length] + 1;
-    cptr = (char *) malloc(len);
-    strcpy(cptr, [sptr UTF8String]);
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "-g");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "1280x800"); 
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--sec");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "rdp");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--plugin");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "cliprdr");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--plugin");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "rdpsnd");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "-u");
-    g_mrdpview->argv[i++] = cptr;
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "lk");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "-p");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "abc@@@123");
-    g_mrdpview->argv[i++] = cptr;
- 
-#if 1
-    // for RemoteApp (RAIL) testing
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--app");
-    g_mrdpview->argv[i++] = cptr;
-    g_mrdpview->isRemoteApp = TRUE;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--plugin");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "rail");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--data");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "||WordPad");
-    g_mrdpview->argv[i++] = cptr;
-
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "--");
-    g_mrdpview->argv[i++] = cptr;
-#endif
-    
-    cptr = (char *)malloc(80);
-    strcpy(cptr, "192.168.1.69:45990");
-    g_mrdpview->argv[i++] = cptr;
-    
-    g_mrdpview->argc = i;
-    
-#else
     // MacFreeRDP was not run in Xcode
     i = 0;
     
@@ -1213,7 +998,6 @@ boolean mac_pre_connect(freerdp *inst)
             g_mrdpview->argv[i++] = cptr;
         }
     }
-#endif
     
     freerdp_parse_args(inst->settings, g_mrdpview->argc, g_mrdpview->argv, process_plugin_args, inst->context->channels, NULL, NULL);
     if ((strcmp(g_mrdpview->argv[1], "-h") == 0) || (strcmp(g_mrdpview->argv[1], "--help") == 0)) {
@@ -1546,8 +1330,6 @@ void channel_activity_cb(
     freerdp *inst = (freerdp *) info;
     RDP_EVENT* event;
     
-    GOT_HERE;
-    
     freerdp_channels_check_fds(inst->context->channels, inst);
     event = freerdp_channels_pop_event(inst->context->channels);
     if (event) {
@@ -1869,7 +1651,6 @@ void cliprdr_send_supported_format_list(freerdp *inst)
     freerdp_channels_send_event(inst->context->channels, (RDP_EVENT*) event);
 }
 
-<<<<<<< HEAD
 /****************************************************************************************
  *                                                                                      *
  *                                                                                      *
@@ -1903,12 +1684,10 @@ void mac_process_rail_event(freerdp *inst, RDP_EVENT *event)
             break;
         
         case RDP_EVENT_TYPE_RAIL_CHANNEL_APPID_RESP:
-            GOT_HERE;
             //xf_process_rail_appid_resp_event(xfi, channels, event);
             break;
         
         case RDP_EVENT_TYPE_RAIL_CHANNEL_LANGBARINFO:
-            GOT_HERE;
             //xf_process_rail_langbarinfo_event(xfi, channels, event);
             break;
     }
@@ -1916,11 +1695,19 @@ void mac_process_rail_event(freerdp *inst, RDP_EVENT *event)
 
 void mac_rail_CreateWindow(rdpRail *rail, rdpWindow *window)
 {
+    boolean showBorder = NO;
     boolean centerWindow = NO;
     boolean moveWindow = NO;
     boolean displayAsModal = NO;
+    boolean activateWindow = YES;
     NSMutableArray * ma = g_mrdpview->windows;
-
+    NSRect contentRect;
+    int styleMask = NSTitledWindowMask | NSResizableWindowMask;
+    
+    // TODO: this should be done just once
+    // main window displays desktop background - hide it
+    [[g_mrdpview window] orderOut:g_mrdpview];
+    
     // make sure window fits resolution
     if (window->windowWidth > g_mrdpview->width)
         window->windowWidth = g_mrdpview->width;
@@ -1934,45 +1721,64 @@ void mac_rail_CreateWindow(rdpRail *rail, rdpWindow *window)
         moveWindow = YES;
     }
     
+    if (window->extendedStyle & WS_EX_APPWINDOW) {
+        showBorder = YES;
+        styleMask |= NSClosableWindowMask;
+        if (window->style & WS_MINIMIZEBOX)
+            styleMask |= NSMiniaturizableWindowMask;
+    }
+    else {
+        styleMask = NSBorderlessWindowMask;
+        activateWindow = NO;
+    }
+    
+    // tool tips should not be activated
+    if (window->extendedStyle & WS_EX_TOOLWINDOW)
+        activateWindow = NO;
+    
     if ((window->extendedStyle & WS_EX_TOPMOST) || (window->extendedStyle & WS_EX_TOOLWINDOW)) {
-        [g_mrdpview->currentWindow view]->skipMoveWindowOnce = TRUE;
+        if (g_mrdpview->currentWindow)
+            [g_mrdpview->currentWindow view]->skipMoveWindowOnce = TRUE;
+        
         moveWindow = YES;
+        
+        // convert from windows to Mac cords
+        window->windowOffsetY = g_mrdpview->height - window->windowOffsetY - window->windowHeight;
     }
     else if (window->style & WS_POPUP) {
         centerWindow = YES;
         moveWindow = YES;
+        activateWindow = NO;
     }
     else {
     }
     
-    // create NSWindow
-    NSRect winFrame = NSMakeRect(window->windowOffsetX, window->windowOffsetY,
-                                 window->windowWidth, window->windowHeight);
+    // create MRDPRailWindow
+    contentRect = NSMakeRect(window->windowOffsetX, window->windowOffsetY,
+                              window->windowWidth, window->windowHeight);
+    
     if (centerWindow)
-        apple_center_window(&winFrame);
+        apple_center_window(&contentRect);
     
-    MRDPRailWindow * newWindow = [[MRDPRailWindow alloc] initWithContentRect:winFrame 
-                                                       styleMask:NSTitledWindowMask | NSResizableWindowMask
-                                                         backing:NSBackingStoreBuffered 
-                                                           defer:NO];
+    MRDPRailWindow * newWindow = [[MRDPRailWindow alloc] initWithContentRect:contentRect 
+                                                                   styleMask:styleMask
+                                                                     backing:NSBackingStoreBuffered 
+                                                                       defer:NO];
 
-    // this does not work if specified during window creation in above code
-    [newWindow setStyleMask:NSBorderlessWindowMask];
-    
+    newWindow->becomeKeyWindowFlag = activateWindow;
+
     if (moveWindow) {
         // let RDP server know that window has moved
         RAIL_WINDOW_MOVE_ORDER windowMove;
-        apple_to_windowMove(&winFrame, &windowMove);
+        apple_to_windowMove(&contentRect, &windowMove);
         windowMove.windowId = window->windowId;
         mac_send_rail_client_event(g_mrdpview->rdp_instance->context->channels, RDP_EVENT_TYPE_RAIL_CLIENT_WINDOW_MOVE, &windowMove);
     }
     
     // create MRDPRailView and add to above window
-    NSRect viewFrame = NSMakeRect(window->clientOffsetX, window->clientOffsetY,
-                                  window->clientAreaWidth, window->clientAreaHeight);
+    MRDPRailView * newView = [[MRDPRailView alloc] initWithFrame:contentRect];
     
-    MRDPRailView * newView = [[MRDPRailView alloc] initWithFrame:viewFrame];
-    [newView setRdpInstance:g_mrdpview->rdp_instance width:g_mrdpview->width andHeight:g_mrdpview->height windowID: window->windowId];
+    [newView setRdpInstance:g_mrdpview->rdp_instance width:g_mrdpview->width andHeight:g_mrdpview->height windowID:window->windowId];
     [newWindow setContentView:newView];
     
     // save new window
@@ -1980,7 +1786,11 @@ void mac_rail_CreateWindow(rdpRail *rail, rdpWindow *window)
     [mrdpWindow setWindowID:window->windowId];
     [mrdpWindow setWindow:newWindow];
     [mrdpWindow setView:newView];
-    
+
+    [newView setMrdpRailWindow:newWindow];
+    [newView setWindowIndex:[ma count]];
+    [newView setActivateWindow:activateWindow];
+         
     // add to list of windows
     [ma addObject:mrdpWindow];
     
@@ -1999,9 +1809,9 @@ void mac_rail_CreateWindow(rdpRail *rail, rdpWindow *window)
     }
     else {
         [newWindow makeKeyAndOrderFront:NSApp];
-        [[g_mrdpview window] resignFirstResponder];
-        [g_mrdpview resignFirstResponder];
-        [[g_mrdpview window] setNextResponder:newWindow];
+        // for bordered windows, we need to redraw window first time
+        if (showBorder)
+            [newView windowDidMove: [NSNotification notificationWithName: @"NSNotification" object:newWindow]];
     }
     
     return;
@@ -2042,24 +1852,25 @@ void mac_rail_SetWindowVisibilityRects(rdpRail *rail, rdpWindow *window)
 void mac_rail_DestroyWindow(rdpRail *rail, rdpWindow *window)
 {
     int count = 0;
+    int obj_index;
     
     for (MRDPWindow * win in g_mrdpview->windows)
     {
         if ([win windowID] == window->windowId) {
-            //[[win window] close];
+            obj_index = [g_mrdpview->windows indexOfObject:win];
+            [[win view] releaseResources];
             [win setView:nil];
             [win setWindow:nil];
             [g_mrdpview->windows removeObject:win];
-            count = [g_mrdpview->windows count];
-            if (count) {
-                g_mrdpview->currentWindow = [g_mrdpview->windows objectAtIndex:count - 1];
-                //[[g_mrdpview window] makeKeyAndOrderFront:[g_mrdpview->currentWindow window]];
-                [[g_mrdpview->currentWindow window] makeKeyAndOrderFront:NSApp];
+
+            if (obj_index == 0) {
+                g_mrdpview->currentWindow = nil;
             }
             else {
-                g_mrdpview->currentWindow = nil;
-                // RAIL_TODO [[g_mrdpview window] makeKeyAndOrderFront:[g_mrdpview window]];
-                [NSApp terminate:nil];
+                g_mrdpview->currentWindow = [g_mrdpview->windows objectAtIndex:obj_index - 1];
+                
+                if (g_mrdpview->currentWindow.view.activateWindow)
+                    mac_rail_send_activate(g_mrdpview->currentWindow.windowID);
             }
             return;
         }
@@ -2068,8 +1879,6 @@ void mac_rail_DestroyWindow(rdpRail *rail, rdpWindow *window)
 
 void mac_rail_register_callbacks(freerdp *inst, rdpRail *rail)
 {
-    GOT_HERE;
-    
     rail->extra = (void *) inst;
     rail->rail_CreateWindow = mac_rail_CreateWindow;
     rail->rail_MoveWindow = mac_rail_MoveWindow;
@@ -2110,8 +1919,6 @@ void mac_process_rail_server_sysparam_event(rdpChannels* channels, RDP_EVENT* ev
 {
     RAIL_SYSPARAM_ORDER* sysparam = (RAIL_SYSPARAM_ORDER*) event->user_data;
     
-    GOT_HERE;
-    
     switch (sysparam->param)
     {
         case SPI_SET_SCREEN_SAVE_ACTIVE:
@@ -2129,8 +1936,6 @@ void mac_process_rail_server_sysparam_event(rdpChannels* channels, RDP_EVENT* ev
 void mac_process_rail_exec_result_event(rdpChannels* channels, RDP_EVENT* event)
 {
     RAIL_EXEC_RESULT_ORDER* exec_result;
-    
-    GOT_HERE;
     
     exec_result = (RAIL_EXEC_RESULT_ORDER*) event->user_data;
     
@@ -2153,13 +1958,7 @@ void mac_process_rail_exec_result_event(rdpChannels* channels, RDP_EVENT* event)
 
 void mac_process_rail_server_minmaxinfo_event(rdpChannels* channels, RDP_EVENT* event)
 {
-    RAIL_MINMAXINFO_ORDER * minmax = (RAIL_MINMAXINFO_ORDER*) event->user_data;
-    
-#if 0
-    printf("minmax_info: maxPosX=%d maxPosY=%d maxWidth=%d maxHeight=%d minTrackWidth=%d minTrackHeight=%d maxTrackWidth=%d maxTrackHeight=%d\n",
-           minmax->maxPosX, minmax->maxPosY, minmax->maxWidth, minmax->maxHeight,
-           minmax->minTrackWidth, minmax->minTrackHeight, minmax->maxTrackWidth, minmax->maxTrackHeight);
-#endif
+    //RAIL_MINMAXINFO_ORDER * minmax = (RAIL_MINMAXINFO_ORDER*) event->user_data;
 }
 
 /** *********************************************************************
@@ -2171,39 +1970,38 @@ void mac_process_rail_server_minmaxinfo_event(rdpChannels* channels, RDP_EVENT* 
 void mac_process_rail_server_localmovesize_event(freerdp *inst, RDP_EVENT *event)
 {
     RAIL_LOCALMOVESIZE_ORDER * moveSize = (RAIL_LOCALMOVESIZE_ORDER *) event->user_data;
-    RAIL_WINDOW_MOVE_ORDER windowMove;
- 
+    
     switch (moveSize->moveSizeType) {
         case RAIL_WMSZ_LEFT:
-            printf("!!!! RAIL_WMSZ_LEFT\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_LEFT;
             break;
             
         case RAIL_WMSZ_RIGHT:
-            printf("!!!! RAIL_WMSZ_RIGHT\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_RIGHT;
             break;
             
         case RAIL_WMSZ_TOP:
-            printf("!!!! RAIL_WMSZ_TOP\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_TOP;
             break;
             
         case RAIL_WMSZ_TOPLEFT:
-            printf("!!!! RAIL_WMSZ_TOPLEFT\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_TOPLEFT;
             break;
             
         case RAIL_WMSZ_TOPRIGHT:
-            printf("!!!! RAIL_WMSZ_TOPRIGHT\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_TOPRIGHT;
             break;
             
         case RAIL_WMSZ_BOTTOM:
-            printf("!!!! RAIL_WMSZ_BOTTOM\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_BOTTOM;
             break;
             
         case RAIL_WMSZ_BOTTOMLEFT:
-            printf("!!!! RAIL_WMSZ_BOTTOMLEFT\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_BOTTOMLEFT;
             break;
             
         case RAIL_WMSZ_BOTTOMRIGHT:
-            printf("!!!! RAIL_WMSZ_BOTTOMRIGHT\n");
+            [g_mrdpview->currentWindow view]->localMoveType = RAIL_WMSZ_BOTTOMRIGHT;
             break;
             
         case RAIL_WMSZ_MOVE:
@@ -2219,14 +2017,13 @@ void mac_process_rail_server_localmovesize_event(freerdp *inst, RDP_EVENT *event
             [g_mrdpview->currentWindow view]->isMoveSizeInProgress = NO;
             [g_mrdpview->currentWindow view]->saveInitialDragLoc = NO;
 
-            //NSRect rect = [[g_mrdpview->currentWindow view] frame];
-            NSRect rect = [[[g_mrdpview->currentWindow view] window] frame];
-
+            NSRect r = [[[g_mrdpview->currentWindow view] window] frame];
+            
             // let RDP server know where this window is located
+            RAIL_WINDOW_MOVE_ORDER windowMove;
+            apple_to_windowMove(&r, &windowMove);
+            windowMove.windowId = g_mrdpview->currentWindow.windowID;
             mac_send_rail_client_event(inst->context->channels, RDP_EVENT_TYPE_RAIL_CLIENT_WINDOW_MOVE, &windowMove);
-
-            // the event we just sent will cause an extra MoveWindow() to be invoked which we need to ignore
-            [g_mrdpview->currentWindow view]->skipMoveWindowOnce = YES;
             
             break;
             
@@ -2241,6 +2038,10 @@ void mac_process_rail_server_localmovesize_event(freerdp *inst, RDP_EVENT *event
         default:
             break;
     }
+    
+    if (moveSize->isMoveSizeStart == 0)
+        [g_mrdpview->currentWindow view]->localMoveType = 0;
+    
     return;
 }
 
@@ -2248,8 +2049,6 @@ void mac_send_rail_client_event(rdpChannels *channels, uint16 event_type, void *
 {
     RDP_EVENT *out_event = NULL;
     void *payload = NULL;
-    
-    GOT_HERE;
     
     payload = rail_clone_order(event_type, param);
     if (payload != NULL) {
@@ -2261,8 +2060,6 @@ void mac_send_rail_client_event(rdpChannels *channels, uint16 event_type, void *
 
 void mac_on_free_rail_client_event(RDP_EVENT* event)
 {
-    GOT_HERE;
-    
     if (event->event_class == RDP_EVENT_CLASS_RAIL)
     {
         rail_free_cloned_order(event->event_type, event->user_data);
@@ -2271,8 +2068,6 @@ void mac_on_free_rail_client_event(RDP_EVENT* event)
 
 void mac_rail_enable_remoteapp_mode()
 {
-    GOT_HERE;
-    
     if (!g_mrdpview->isRemoteApp)
         g_mrdpview->isRemoteApp = TRUE;
 }
@@ -2309,6 +2104,32 @@ void apple_to_windowMove(NSRect * r, RAIL_WINDOW_MOVE_ORDER * windowMove)
     windowMove->top = (uint16) g_mrdpview->height - (r->origin.y + r->size.height);  // y-cord of top left corner
     windowMove->right = (uint16) (windowMove->left + r->size.width);                 // x-cord of bottom right corner
     windowMove->bottom = (uint16) (windowMove->top + r->size.height);                // y-cord of bottom right corner
+}
+
+void printScreenInfo()
+{
+
+    int count = [[NSScreen screens] count];
+
+    for (int i = 0; i< count; i++)
+    {
+        NSRect r = [[[NSScreen screens] objectAtIndex:i] frame];
+        
+        printf("screen %d: rect(%d,%d %dx%d)\n",
+               i, (int) r.origin.x, (int) r.origin.y,
+               (int) r.size.width, (int) r.size.height);
+    }
+    printf("\n");
+}
+
+void set_current_window(int window_index)
+{
+    NSMutableArray * ma = g_mrdpview->windows;
+    
+    if ((window_index < 0) || (window_index > ([ma count] - 1)))
+        return;
+    
+    g_mrdpview->currentWindow = [ma objectAtIndex:window_index];
 }
 
 @end
