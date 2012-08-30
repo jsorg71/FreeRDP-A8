@@ -29,5 +29,6 @@ void xf_rail_send_activate(xfInfo* xfi, Window xwindow, boolean enabled);
 void xf_process_rail_event(xfInfo* xfi, rdpChannels* chanman, RDP_EVENT* event);
 void xf_rail_adjust_position(xfInfo* xfi, rdpWindow *window);
 void xf_rail_end_local_move(xfInfo* xfi, rdpWindow *window);
+int xf_send_move(xfInfo* xfi, RAIL_WINDOW_MOVE_ORDER* move);
 
 #endif /* __XF_RAIL_H */

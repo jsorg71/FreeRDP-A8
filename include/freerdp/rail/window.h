@@ -66,6 +66,11 @@ struct rdp_window
 	uint32 visibleOffsetY;
 	uint16 numVisibilityRects;
 	RECTANGLE_16* visibilityRects;
+
+	RAIL_WINDOW_MOVE_ORDER delayed_move;
+	int delayed_move_flags;
+	int delayed_mouve_count;
+
 };
 
 FREERDP_API void window_state_update(rdpWindow* window, WINDOW_ORDER_INFO* orderInfo, WINDOW_STATE_ORDER* window_state);

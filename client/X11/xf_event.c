@@ -531,8 +531,8 @@ boolean xf_event_ConfigureNotify(xfInfo* xfi, XEvent* event, boolean app)
 			xf_rail_adjust_position(xfi, window);
 			window->windowOffsetX = xfw->left;
 			window->windowOffsetY = xfw->top;
-			window->windowWidth = xfw->right - xfw->left;
-			window->windowHeight = xfw->bottom - xfw->top;
+			window->windowWidth = xfw->width;
+			window->windowHeight = xfw->height;
 		}
 		else
 		{
