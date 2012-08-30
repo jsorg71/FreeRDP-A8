@@ -52,6 +52,8 @@ typedef int boolean;
     boolean            skipResizeOnce;
     boolean            saveInitialDragLoc;
     boolean            skipMoveWindowOnce;
+    boolean            gestureEventInProgress;
+    int                scrollWheelCount;
     
     // store state info for some keys
     int                kdlshift;
@@ -145,6 +147,7 @@ void mac_process_rail_server_minmaxinfo_event(rdpChannels* channels, RDP_EVENT* 
 void mac_process_rail_server_localmovesize_event(freerdp *inst, RDP_EVENT *event);
 void apple_center_window(NSRect * r);
 void apple_to_windowMove(NSRect * r, RAIL_WINDOW_MOVE_ORDER * windowMove);
+void set_current_window(int window_index);
 
 struct mac_context
 {
