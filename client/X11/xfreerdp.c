@@ -315,15 +315,16 @@ void xf_create_window(xfInfo* xfi)
 	if (xfi->fullscreen)
 		xf_SetWindowFullscreen(xfi, xfi->window, xfi->fullscreen);
 
-	/* wait for VisibilityNotify */
-	do
+	if ((xfi->rail_flags & 1) == 0) /* only wait if main window is visible */
 	{
-		XMaskEvent(xfi->display, VisibilityChangeMask, &xevent);
+		/* wait for VisibilityNotify */
+		do
+		{
+			XMaskEvent(xfi->display, VisibilityChangeMask, &xevent);
+		}
+		while (xevent.type != VisibilityNotify);
+		xfi->unobscured = (xevent.xvisibility.state == VisibilityUnobscured);
 	}
-	while (xevent.type != VisibilityNotify);
-
-	xfi->unobscured = (xevent.xvisibility.state == VisibilityUnobscured);
-
 	XSetWMProtocols(xfi->display, xfi->window->handle, &(xfi->WM_DELETE_WINDOW), 1);
 	xfi->drawable = xfi->window->handle;
 }
@@ -413,7 +414,7 @@ boolean xf_get_pixmap_info(xfInfo* xfi)
 		 * (BGR vs RGB, or red being the least significant byte)
 		 */
 
-		if (vi->red_mask & 0xFF) 
+		if (vi->red_mask & 0xFF)
 		{
 			xfi->clrconv->invert = true;
 		}
@@ -474,7 +475,7 @@ boolean xf_pre_connect(freerdp* instance)
 	boolean bitmap_cache;
 	rdpSettings* settings;
 	int arg_parse_result;
-	
+
 	xfi = (xfInfo*) xzalloc(sizeof(xfInfo));
 	((xfContext*) instance->context)->xfi = xfi;
 
@@ -482,15 +483,15 @@ boolean xf_pre_connect(freerdp* instance)
 	xfi->context = (xfContext*) instance->context;
 	xfi->context->settings = instance->settings;
 	xfi->instance = instance;
-	
+
 	arg_parse_result = freerdp_parse_args(instance->settings, instance->context->argc,instance->context->argv,
 				xf_process_plugin_args, instance->context->channels, xf_process_client_args, xfi);
-	
+
 	if (arg_parse_result < 0)
 	{
 		if (arg_parse_result == FREERDP_ARGS_PARSE_FAILURE)
 			printf("failed to parse arguments.\n");
-		
+
 		exit(XF_EXIT_PARSE_ARGUMENTS);
 	}
 
@@ -588,6 +589,7 @@ boolean xf_pre_connect(freerdp* instance)
 	xfi->fullscreen_toggle = true;
 	xfi->sw_gdi = settings->sw_gdi;
 	xfi->parent_window = (Window) settings->parent_window_xid;
+	xfi->rail_flags = settings->rail_flags;
 
 	xf_detect_monitors(xfi, settings);
 
@@ -625,7 +627,7 @@ uint32 xf_detect_cpu()
 
 	cpuid(1, &eax, &ebx, &ecx, &edx);
 
-	if (edx & (1<<26)) 
+	if (edx & (1<<26))
 	{
 		DEBUG("SSE2 detected");
 		cpu_opt |= CPU_SSE2;
@@ -1017,7 +1019,7 @@ void xf_window_free(xfInfo* xfi)
 			context->rail = NULL;
 	}
 
-	if (xfi->rfx_context) 
+	if (xfi->rfx_context)
 	{
 		rfx_context_free(xfi->rfx_context);
 		xfi->rfx_context = NULL;

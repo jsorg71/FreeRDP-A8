@@ -322,7 +322,10 @@ xfWindow* xf_CreateDesktopWindow(xfInfo* xfi, char* name, int width, int height,
 				PropModeReplace, (uint8*) xf_icon_prop, ARRAY_SIZE(xf_icon_prop));
 
 		XSelectInput(xfi->display, window->handle, input_mask);
-		xf_MapWindow(xfi->display, window->handle);
+		if ((xfi->rail_flags & 1) == 0) /* is window visible */
+		{
+			xf_MapWindow(xfi->display, window->handle);
+		}
 	}
 
 	XStoreName(xfi->display, window->handle, name);
@@ -714,6 +717,14 @@ void xf_UpdateWindowArea(xfInfo* xfi, xfWindow* window, int x, int y, int width,
 	int ax, ay;
 	rdpWindow* wnd;
 	wnd = window->window;
+
+	if (xfi->remote_app)
+	{
+		if (wnd->delayed_move_flags & 1)
+		{
+			return;
+		}
+	}
 
 	ax = x + wnd->windowOffsetX;
 	ay = y + wnd->windowOffsetY;

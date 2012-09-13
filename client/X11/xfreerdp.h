@@ -155,6 +155,8 @@ struct xf_info
 
 	Atom WM_PROTOCOLS;
 	Atom WM_DELETE_WINDOW;
+
+	uint32 rail_flags;
 };
 
 void xf_toggle_fullscreen(xfInfo* xfi);

@@ -406,7 +406,8 @@ struct rdp_settings
 	ALIGN64 uint32 num_icon_caches; /* 313 */
 	ALIGN64 uint32 num_icon_cache_entries; /* 314 */
 	ALIGN64 boolean rail_langbar_supported; /* 315 */
-	ALIGN64 uint64 paddingO[320 - 316]; /* 316 */
+	ALIGN64 uint32 rail_flags; /* 316 */
+	ALIGN64 uint64 paddingO[320 - 317]; /* 317 */
 
 	/* Pointer */
 	ALIGN64 boolean large_pointer; /* 320 */

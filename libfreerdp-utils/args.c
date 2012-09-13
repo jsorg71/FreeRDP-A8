@@ -80,6 +80,7 @@ int freerdp_parse_args(rdpSettings* settings, int argc, char** argv,
 				"  -X: embed into another window with a given XID.\n"
 				"  -z: enable compression\n"
 				"  --app: RemoteApp connection. This implies -g workarea\n"
+				"  --railhmw: RemoteApp, hide the main window\n"
 				"  --ext: load an extension\n"
 				"  --no-auth: disable authentication\n"
 				"  --no-fastpath: disable fast-path\n"
@@ -498,6 +499,10 @@ int freerdp_parse_args(rdpSettings* settings, int argc, char** argv,
 			settings->rail_langbar_supported = true;
 			settings->workarea = true;
 			settings->performance_flags = PERF_DISABLE_WALLPAPER | PERF_DISABLE_FULLWINDOWDRAG;
+		}
+		else if (strcmp("--railhmw", argv[index]) == 0)
+		{
+			settings->rail_flags |= 1;
 		}
 		else if (strcmp("-x", argv[index]) == 0)
 		{
