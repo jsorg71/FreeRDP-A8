@@ -260,7 +260,7 @@ void xf_SetWindowStyle(xfInfo* xfi, xfWindow* window, uint32 style, uint32 ex_st
 
 }
 
-int xf_MapWindow(Display* dis, Window wnd)
+int xf_MapWindow(Display* dis, Window wnd, boolean* unobscured)
 {
 	XEvent xevent;
 
@@ -270,6 +270,8 @@ int xf_MapWindow(Display* dis, Window wnd)
 		XMaskEvent(dis, VisibilityChangeMask, &xevent);
 	}
 	while (xevent.type != VisibilityNotify);
+	if (unobscured != NULL)
+		*unobscured = (xevent.xvisibility.state == VisibilityUnobscured);
 	return 0;
 }
 
@@ -324,7 +326,7 @@ xfWindow* xf_CreateDesktopWindow(xfInfo* xfi, char* name, int width, int height,
 		XSelectInput(xfi->display, window->handle, input_mask);
 		if ((xfi->rail_flags & 1) == 0) /* is window visible */
 		{
-			xf_MapWindow(xfi->display, window->handle);
+			xf_MapWindow(xfi->display, window->handle, &(xfi->unobscured));
 		}
 	}
 
@@ -457,7 +459,7 @@ xfWindow* xf_CreateWindow(xfInfo* xfi, rdpWindow* wnd, int x, int y, int width, 
 		ColormapChangeMask | OwnerGrabButtonMask;
 
 	XSelectInput(xfi->display, window->handle, input_mask);
-	xf_MapWindow(xfi->display, window->handle);
+	xf_MapWindow(xfi->display, window->handle, NULL);
 
 	memset(&gcv, 0, sizeof(gcv));
 	window->gc = XCreateGC(xfi->display, window->handle, GCGraphicsExposures, &gcv);

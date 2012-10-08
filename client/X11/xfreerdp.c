@@ -276,7 +276,6 @@ boolean xf_process_x_events(freerdp* instance)
 
 void xf_create_window(xfInfo* xfi)
 {
-	XEvent xevent;
 	char* win_title;
 	int width, height;
 
@@ -315,16 +314,6 @@ void xf_create_window(xfInfo* xfi)
 	if (xfi->fullscreen)
 		xf_SetWindowFullscreen(xfi, xfi->window, xfi->fullscreen);
 
-	if ((xfi->rail_flags & 1) == 0) /* only wait if main window is visible */
-	{
-		/* wait for VisibilityNotify */
-		do
-		{
-			XMaskEvent(xfi->display, VisibilityChangeMask, &xevent);
-		}
-		while (xevent.type != VisibilityNotify);
-		xfi->unobscured = (xevent.xvisibility.state == VisibilityUnobscured);
-	}
 	XSetWMProtocols(xfi->display, xfi->window->handle, &(xfi->WM_DELETE_WINDOW), 1);
 	xfi->drawable = xfi->window->handle;
 }
